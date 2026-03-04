@@ -1,0 +1,5 @@
+data/testing
+data/training
+data/slow_traffic_small.mp4
+*.pt
+models
