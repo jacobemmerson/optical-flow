@@ -6,10 +6,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Path to your LibTorch
-set(CMAKE_PREFIX_PATH /home/tae/libs/libtorch) # adjust if different
+set(CMAKE_PREFIX_PATH /home/tae/libs/libtorch)
 
 find_package(Torch REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # Enable CUDA if you have GPU support
 find_package(CUDA)
@@ -18,12 +18,14 @@ find_package(CUDA)
 add_executable(denseflow dense_flow.cpp)
 
 # Link LibTorch
-target_link_libraries(denseflow "${TORCH_LIBRARIES}")
+target_link_libraries(denseflow ${TORCH_LIBRARIES})
+target_link_libraries(denseflow ${OpenCV_LIBS})
 
 # Include directories
 target_include_directories(denseflow PUBLIC
     ${TORCH_INCLUDE_DIRS}
 )
+include_directories( ${OpenCV_INCLUDE_DIRS} )
 
 # Avoid RPATH issues on Linux
 set_target_properties(denseflow PROPERTIES
