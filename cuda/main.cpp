@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../utils/utils.h"
+#include "utils/utils.h"
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>

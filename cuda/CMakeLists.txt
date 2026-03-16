@@ -8,7 +8,7 @@ enable_language(CUDA)
 add_executable(
     fast_lk
     main.cpp
-    ../utils/utils.cpp
+    utils/utils.cpp
     lucas_kanade.cu
 )
 
