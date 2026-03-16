@@ -1,110 +1,164 @@
 #include <cuda_runtime.h>
-#include <stdio.h>
 
-// Device helper: solve 2x2 system with singularity + eigenvalue checks
-__device__ inline float2 solve_lk_system(float sxx, float sxy, float syy, float sxt, float syt)
+#define PATCH_RADIUS 3
+#define PATCH_SIZE (2*PATCH_RADIUS+1)
+#define PATCH_PIXELS (PATCH_SIZE*PATCH_SIZE)
+#define MAX_ITERS 10
+
+// -------------------------------------------
+// Bilinear sampling
+// -------------------------------------------
+
+__device__ inline float bilinear(
+    const float* img,
+    int w,
+    int h,
+    float x,
+    float y)
 {
-    const float DET_THRESHOLD   = 1.5e-5f;
-    const float EIGEN_THRESHOLD = 1e-3f;
+    int x0 = floorf(x);
+    int y0 = floorf(y);
 
-    float det = sxx * syy - sxy * sxy;
-    if (fabsf(det) < DET_THRESHOLD) return make_float2(0.0f, 0.0f);
+    float dx = x - x0;
+    float dy = y - y0;
 
-    float trace = sxx + syy;
-    float twice_delta = sqrtf(trace * trace - 4.0f * det);
-    if (isnan(twice_delta) || (trace - twice_delta) <= EIGEN_THRESHOLD) {
-        return make_float2(0.0f, 0.0f);
-    }
+    x0 = max(0,min(w-2,x0));
+    y0 = max(0,min(h-2,y0));
 
-    float flow_x = (syy * (-sxt) + sxy * syt) / det;
-    float flow_y = (sxy * sxt - sxx * syt) / det;
+    float I00 = img[y0*w+x0];
+    float I01 = img[y0*w+x0+1];
+    float I10 = img[(y0+1)*w+x0];
+    float I11 = img[(y0+1)*w+x0+1];
 
-    return make_float2(flow_x, flow_y);
+    return (1-dx)*(1-dy)*I00 +
+           dx*(1-dy)*I01 +
+           (1-dx)*dy*I10 +
+           dx*dy*I11;
 }
 
-// Kernel 1: Gradients
-__global__ void compute_gradients_kernel(
-    const float* __restrict__ prev,
-    const float* __restrict__ curr,
-    float* __restrict__ Ix,
-    float* __restrict__ Iy,
-    float* __restrict__ It,
-    int width, int height)
+// -------------------------------------------
+// Warp reduction
+// -------------------------------------------
+
+__device__ inline float warpReduce(float val)
 {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
+    for(int offset=16; offset>0; offset/=2)
+        val += __shfl_down_sync(0xffffffff,val,offset);
 
-    int idx = y * width + x;
-    It[idx] = curr[idx] - prev[idx];
-
-    if (x > 0 && x < width-1 && y > 0 && y < height-1) {
-        Ix[idx] = (prev[y*width + x+1] - prev[y*width + x-1]) * 0.5f;
-        Iy[idx] = (prev[(y+1)*width + x] - prev[(y-1)*width + x]) * 0.5f;
-    } else {
-        Ix[idx] = Iy[idx] = 0.0f;
-    }
+    return val;
 }
 
-// Kernel 2: Fused Lucas-Kanade 
-__global__ void lucas_kanade_fused_kernel(
-    const float* __restrict__ Ix,
-    const float* __restrict__ Iy,
-    const float* __restrict__ It,
-    float* __restrict__ flow_u,
-    float* __restrict__ flow_v,
-    int width, int height, int win_half)
+// -------------------------------------------
+// Warp-per-feature LK kernel
+// -------------------------------------------
+
+__global__ void lk_warp_kernel(
+    const float* prev,
+    const float* curr,
+    const float2* pts,
+    float2* flow,
+    int n,
+    int w,
+    int h)
 {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
+    int warp_id = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+    int lane = threadIdx.x & 31;
 
-    float sxx = 0.0f, sxy = 0.0f, syy = 0.0f, sxt = 0.0f, syt = 0.0f;
+    if (warp_id >= n) return;
 
-    for (int dy = -win_half; dy <= win_half; ++dy) {
-        for (int dx = -win_half; dx <= win_half; ++dx) {
-            int nx = x + dx, ny = y + dy;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                int nidx = ny * width + nx;
-                float fx = Ix[nidx], fy = Iy[nidx], ft = It[nidx];
-                sxx += fx * fx;
-                syy += fy * fy;
-                sxy += fx * fy;
-                sxt += fx * ft;
-                syt += fy * ft;
+    float2 p = pts[warp_id];
+
+    float u = 0.f;
+    float v = 0.f;
+
+    for(int iter=0; iter<MAX_ITERS; iter++)
+    {
+        float Gxx=0,Gyy=0,Gxy=0;
+        float bx=0,by=0;
+
+        if (lane < PATCH_PIXELS)
+        {
+            int dx = lane % PATCH_SIZE - PATCH_RADIUS;
+            int dy = lane / PATCH_SIZE - PATCH_RADIUS;
+
+            float x = p.x + dx;
+            float y = p.y + dy;
+
+            float I1 = bilinear(prev,w,h,x,y);
+            float I2 = bilinear(curr,w,h,x+u,y+v);
+
+            float Ix =
+                bilinear(prev,w,h,x+1,y) -
+                bilinear(prev,w,h,x-1,y);
+
+            float Iy =
+                bilinear(prev,w,h,x,y+1) -
+                bilinear(prev,w,h,x,y-1);
+
+            float It = I2 - I1;
+
+            Gxx = Ix*Ix;
+            Gyy = Iy*Iy;
+            Gxy = Ix*Iy;
+
+            bx = Ix*It;
+            by = Iy*It;
+        }
+
+        Gxx = warpReduce(Gxx);
+        Gyy = warpReduce(Gyy);
+        Gxy = warpReduce(Gxy);
+
+        bx = warpReduce(bx);
+        by = warpReduce(by);
+
+        if (lane == 0)
+        {
+            float det = Gxx*Gyy - Gxy*Gxy;
+
+            if (fabs(det) > 1e-6f)
+            {
+                float inv = 1.f/det;
+
+                float du = (-Gyy*bx + Gxy*by)*inv;
+                float dv = ( Gxy*bx - Gxx*by)*inv;
+
+                u += du;
+                v += dv;
+
+                if (du*du + dv*dv < 1e-4)
+                    iter = MAX_ITERS;
             }
         }
+
+        u = __shfl_sync(0xffffffff,u,0);
+        v = __shfl_sync(0xffffffff,v,0);
     }
 
-    float2 flow = solve_lk_system(sxx, sxy, syy, sxt, syt);
-    int idx = y * width + x;
-    flow_u[idx] = flow.x;
-    flow_v[idx] = flow.y;
+    if (lane == 0)
+        flow[warp_id] = make_float2(u,v);
 }
 
-// Launcher (to be called each frame)
 void run_lucas_kanade_cuda(
     const float* d_prev,
     const float* d_curr,
-    float* d_flow_u,
-    float* d_flow_v,
+    const float2* d_points,
+    float2* d_flow,
+    int n_points,
     int width,
-    int height,
-    int window_size)
+    int height)
 {
-    int win_half = window_size / 2;
+    int warps_per_block = 8;
+    int threads = warps_per_block * 32;
 
-    float *d_Ix, *d_Iy, *d_It;
-    cudaMalloc(&d_Ix, width * height * sizeof(float));
-    cudaMalloc(&d_Iy, width * height * sizeof(float));
-    cudaMalloc(&d_It, width * height * sizeof(float));
+    int blocks = (n_points + warps_per_block - 1) / warps_per_block;
 
-    dim3 block(16, 16);
-    dim3 grid((width + 15)/16, (height + 15)/16);
-
-    compute_gradients_kernel<<<grid, block>>>(d_prev, d_curr, d_Ix, d_Iy, d_It, width, height);
-    lucas_kanade_fused_kernel<<<grid, block>>>(d_Ix, d_Iy, d_It, d_flow_u, d_flow_v, width, height, win_half);
-
-    cudaFree(d_Ix); cudaFree(d_Iy); cudaFree(d_It);
-    cudaDeviceSynchronize();  // safe during development
+    lk_warp_kernel<<<blocks,threads>>>(
+        d_prev,
+        d_curr,
+        d_points,
+        d_flow,
+        n_points,
+        width,
+        height);
 }

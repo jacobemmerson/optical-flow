@@ -1,23 +1,10 @@
-# Comparing Optical Flow Implementations (OpenCV, Fused Kernels)
+# Lucas-Kanade Sparse and Dense Optical Flow with Fused Kernels
 
 Tae Emmerson | Jan. 24, 2026
 
-```
-$ python python/main.py
-```
-
-```
-$ cd cpp/
-$ rm -rf build
-$ mkdir build && cd build
-$ cmake ..
-$ make
-$ ./flowtests
-```
-
 ## Introduction
 
-This project explores the throughput of OpenCV's classical optical flow algorithms (Lucas-Kanade, Farneback). 
+This project explores the throughput of the classical Lucas-Kanade optical flow algorithm based on its OpenCV (C++/Python) and CUDA implementation from scratch. 
 
 ### Optical Flow:
 
@@ -106,9 +93,13 @@ $$
 \end{bmatrix}
 $$
 
-### Farneback (Dense)
-
 ## Results
+
+| | Runtime per Frame (ms) | Speedup (relative)|
+| --- | --- | --- |
+| Python | - | - |
+| C++ | 1.6099 | - |
+| CUDA | 0.1921 | - |
 
 ## Citations
 

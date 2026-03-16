@@ -3,9 +3,9 @@ import cv2 as cv
 import argparse
 from PIL import Image
 from time import perf_counter
-from utils import FlowSet
+from algorithms.utils import FlowSet
     
-def sparse(plot=False):
+def sparse(plot=False, return_average=False):
 
     # params for Shi-Tomasi corner detection
     feature_params = dict(
@@ -58,4 +58,7 @@ def sparse(plot=False):
 
     end = perf_counter()
     #print(f"Total time = {end - start:.4f} | Average = {(end - start) / len(data):.4f}")
-    return end - start
+    time = end - start
+    if return_average:
+        return time / len(data)
+    return time

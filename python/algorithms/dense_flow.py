@@ -3,9 +3,9 @@ import cv2 as cv
 import argparse
 from PIL import Image
 from time import perf_counter
-from utils import FlowSet
+from algorithms.utils import FlowSet
     
-def dense(plot=False):
+def dense(plot=False, return_average=False):
 
     # Parameters for farneback optical flow
     farneback_params = dict( 
@@ -36,5 +36,7 @@ def dense(plot=False):
                 return
             
     end = perf_counter()
-    #print(f"Total time = {end - start:.4f} | Average = {(end - start) / len(data):.4f}")
-    return end - start
+    time = end - start
+    if return_average:
+        return time / len(data)
+    return time

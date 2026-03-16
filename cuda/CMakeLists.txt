@@ -1,33 +1,33 @@
 cmake_minimum_required(VERSION 3.22)
-project(FastDenseLK LANGUAGES CXX CUDA)
+project(fast_lk LANGUAGES CXX CUDA)
 
 find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit REQUIRED)           # modern way (works on CUDA 10+)
 enable_language(CUDA)
 
 add_executable(
-    fast_dense_lk
+    fast_lk
     main.cpp
     ../utils/utils.cpp
     lucas_kanade.cu
 )
 
-target_include_directories(fast_dense_lk PRIVATE
+target_include_directories(fast_lk PRIVATE
     ${OpenCV_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
 )
 
-target_link_libraries(fast_dense_lk PRIVATE
+target_link_libraries(fast_lk PRIVATE
     ${OpenCV_LIBS}
     CUDA::cudart
 )
 
-target_compile_options(fast_dense_lk PRIVATE
+target_compile_options(fast_lk PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native>
     $<$<COMPILE_LANGUAGE:CUDA>:-O3>
 )
 
-set_target_properties(fast_dense_lk PROPERTIES
+set_target_properties(fast_lk PROPERTIES
     CUDA_ARCHITECTURES "75"          
     CUDA_SEPARABLE_COMPILATION OFF
 )

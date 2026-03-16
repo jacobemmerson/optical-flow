@@ -18,10 +18,10 @@ def main():
     )
     args.add_argument('--iterations', default=5, help='The number of iterations to average over for a measure of time.')
     args = args.parse_args()
-    N = args.iterations
+    N = int(args.iterations)
 
     def measure(func: Callable, iterations: int =N):
-        return [func() for i in range(iterations)]
+        return [func(return_average=True) for i in range(iterations)]
     
     def report(times: List[int]):
         mu = np.mean(times)
