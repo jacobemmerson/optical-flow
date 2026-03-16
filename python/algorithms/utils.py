@@ -21,8 +21,9 @@ def plot_sample(img1, img2, flow):
     plt.show()
 
 class FlowSet(Dataset):
-    def __init__(self, dir_path, occ=True):
+    def __init__(self, dir_path, occ=True, preload=True):
         
+        self.preload = preload
         self.root = dir_path
         self.occ = occ # occlusion flag
 
@@ -45,15 +46,24 @@ class FlowSet(Dataset):
             )
 
             if os.path.exists(img1_path) and os.path.exists(img2_path):
-                samples.append((img1_path, img2_path, flow_path))
+                if self.preload:
+                    samples.append((
+                        cv.imread(img1_path),
+                        cv.imread(img2_path),
+                        cv.imread(flow_path)
+                    ))
+                else:
+                    samples.append((img1_path, img2_path, flow_path))
 
         return samples
-
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, index):
+        if self.preload:
+            return self.samples[index]
+        
         img1_path, img2_path, flow_path = self.samples[index]
         img1, img2 = cv.imread(img1_path), cv.imread(img2_path)
         flow = cv.imread(flow_path)

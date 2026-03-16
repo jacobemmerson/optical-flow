@@ -1,101 +1,98 @@
 #include <iostream>
+#include "../utils/utils.h"
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/videoio.hpp>
 #include <opencv2/video.hpp>
+#include <chrono>
+#include <vector>
 
-using namespace cv;
-using namespace std;
+// Add this helper function somewhere in main.cpp (e.g. before main(), or inside main before the loop)
+cv::Mat visualizeDenseFlow(const cv::Mat& flow, double mag_scale = 10.0) {
+    // flow is CV_32FC2
+    std::vector<cv::Mat> flow_split(2);
+    cv::split(flow, flow_split);
 
-int main(int argc, char **argv)
-{
-    const string about =
-        "This sample demonstrates Lucas-Kanade Optical Flow calculation.\n"
-        "The example file can be downloaded from:\n"
-        "  https://www.bogotobogo.com/python/OpenCV_Python/images/mean_shift_tracking/slow_traffic_small.mp4";
-    const string keys =
+    cv::Mat mag, ang;
+    cv::cartToPolar(flow_split[0], flow_split[1], mag, ang, true);  // true = degrees (0..360)
+
+    // Convert to HSV for nice color coding
+    ang.convertTo(ang, CV_8U, 0.5);                    // 0..180 (hue range)
+    cv::normalize(mag, mag, 0, 255, cv::NORM_MINMAX, CV_8U);  // scale magnitude nicely
+
+    std::vector<cv::Mat> hsv_channels = {
+        ang,
+        cv::Mat::ones(ang.size(), CV_8U) * 255,   // full saturation
+        mag
+    };
+
+    cv::Mat hsv, bgr;
+    cv::merge(hsv_channels, hsv);
+    cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
+    return bgr;
+}
+
+int main(int argc, char** argv) {
+    // === Command line (kept only the plot flag) ===
+    cv::CommandLineParser parser(argc, argv,
         "{ h help |      | print this help message }"
-        "{ @image | vtest.avi | path to image file }";
-    CommandLineParser parser(argc, argv, keys);
-    parser.about(about);
-    if (parser.has("help"))
-    {
+        "{ @plot  |      | show optical flow tracks }");
+    parser.about("Fast Lucas-Kanade on KITTI 2012/2015");
+    if (parser.has("help")) {
         parser.printMessage();
         return 0;
     }
-    string filename = samples::findFile(parser.get<string>("@image"));
-    if (!parser.check())
-    {
-        parser.printErrors();
-        return 0;
+    bool plot = parser.has("@plot");
+
+    // Random colors for visualization
+    std::vector<cv::Scalar> colors;
+    colors.reserve(100);
+    cv::RNG rng;
+    for (int i = 0; i < 100; ++i) {
+        colors.emplace_back(rng.uniform(0, 256), rng.uniform(0, 256), rng.uniform(0, 256));
     }
 
-    VideoCapture capture(filename);
-    if (!capture.isOpened()){
-        //error in opening the video input
-        cerr << "Unable to open file!" << endl;
-        return 0;
+    FlowSet dataset("../../data", true);
+    cv::Mat img1_gray, img2_gray;
+    std::vector<uchar> status;
+    std::vector<float> err;
+    cv::Mat flow;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < dataset.size(); ++i) {
+        auto sample = dataset.get(i);
+
+        cv::cvtColor(sample.img1, img1_gray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(sample.img2, img2_gray, cv::COLOR_BGR2GRAY);
+
+        cv::calcOpticalFlowFarneback(
+            img1_gray,
+            img2_gray,
+            flow,
+            0.5, // pyr_scale
+            2, // levels
+            15, // winsize
+            3, // iterations
+            5, // poly_n
+            1.5, // poly_sigma
+            0 // flags
+        );
+
+        if (plot) {
+                    cv::Mat flow_vis = visualizeDenseFlow(flow);
+
+                    // Blend with original image so you can still see the scene
+                    cv::Mat display;
+                    cv::addWeighted(sample.img2, 0.7, flow_vis, 0.3, 0.0, display);
+
+                    cv::imshow("Dense Farneback Optical Flow", display);
+                    int k = cv::waitKey(1);
+                    if (k == 'q' || k == 27) break;
+                }
     }
 
-    // Create some random colors
-    vector<Scalar> colors;
-    RNG rng;
-    for(int i = 0; i < 100; i++)
-    {
-        int r = rng.uniform(0, 256);
-        int g = rng.uniform(0, 256);
-        int b = rng.uniform(0, 256);
-        colors.emplace_back(r,g,b);
-    }
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    std::cout << "Time running: " << duration.count() / 1e6 << " seconds\n";
 
-    Mat old_frame, old_gray;
-    vector<Point2f> p0, p1;
-
-    // Take first frame and find corners in it
-    capture >> old_frame;
-    cvtColor(old_frame, old_gray, COLOR_BGR2GRAY);
-    goodFeaturesToTrack(old_gray, p0, 100, 0.3, 7, Mat(), 7, false, 0.04);
-
-    // Create a mask image for drawing purposes
-    Mat mask = Mat::zeros(old_frame.size(), old_frame.type());
-
-    while(true){
-        Mat frame, frame_gray;
-
-        capture >> frame;
-        if (frame.empty())
-            break;
-        cvtColor(frame, frame_gray, COLOR_BGR2GRAY);
-
-        // calculate optical flow
-        vector<uchar> status;
-        vector<float> err;
-        TermCriteria criteria = TermCriteria((TermCriteria::COUNT) + (TermCriteria::EPS), 10, 0.03);
-        calcOpticalFlowPyrLK(old_gray, frame_gray, p0, p1, status, err, Size(15,15), 2, criteria);
-
-        vector<Point2f> good_new;
-        for(uint i = 0; i < p0.size(); i++)
-        {
-            // Select good points
-            if(status[i] == 1) {
-                good_new.push_back(p1[i]);
-                // draw the tracks
-                line(mask,p1[i], p0[i], colors[i], 2);
-                circle(frame, p1[i], 5, colors[i], -1);
-            }
-        }
-        Mat img;
-        add(frame, mask, img);
-
-        imshow("Frame", img);
-
-        int keyboard = waitKey(30);
-        if (keyboard == 'q' || keyboard == 27)
-            break;
-
-        // Now update the previous frame and previous points
-        old_gray = frame_gray.clone();
-        p0 = good_new;
-    }
+    return 0;
 }

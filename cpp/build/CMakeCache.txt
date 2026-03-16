@@ -146,7 +146,7 @@ CMAKE_PROJECT_DESCRIPTION:STATIC=
 CMAKE_PROJECT_HOMEPAGE_URL:STATIC=
 
 //Value Computed by CMake
-CMAKE_PROJECT_NAME:STATIC=DenseFlowTest
+CMAKE_PROJECT_NAME:STATIC=SparseFlowTest
 
 //Path to a program.
 CMAKE_RANLIB:FILEPATH=/usr/bin/ranlib
@@ -396,6 +396,9 @@ CUDA_nppc_LIBRARY:FILEPATH=/usr/local/cuda-12.8/lib64/libnppc.so
 //Path to a library.
 CUDA_nppc_static_LIBRARY:FILEPATH=/usr/local/cuda-12.8/lib64/libnppc_static.a
 
+//"nppi" library
+CUDA_nppi_LIBRARY:FILEPATH=CUDA_nppi_LIBRARY-NOTFOUND
+
 //"nppial" library
 CUDA_nppial_LIBRARY:FILEPATH=/usr/local/cuda-12.8/lib64/libnppial.so
 
@@ -486,15 +489,6 @@ CUDA_nvrtc_LIBRARY:FILEPATH=/usr/local/cuda-12.8/lib64/libnvrtc.so
 //The directory containing a CMake configuration file for Caffe2.
 Caffe2_DIR:PATH=/home/tae/libs/libtorch/share/cmake/Caffe2
 
-//Value Computed by CMake
-DenseFlowTest_BINARY_DIR:STATIC=/home/tae/optical-flow/cpp/build
-
-//Value Computed by CMake
-DenseFlowTest_IS_TOP_LEVEL:STATIC=ON
-
-//Value Computed by CMake
-DenseFlowTest_SOURCE_DIR:STATIC=/home/tae/optical-flow/cpp
-
 //The directory containing a CMake configuration file for MKLDNN.
 MKLDNN_DIR:PATH=MKLDNN_DIR-NOTFOUND
 
@@ -502,7 +496,16 @@ MKLDNN_DIR:PATH=MKLDNN_DIR-NOTFOUND
 MKL_DIR:PATH=MKL_DIR-NOTFOUND
 
 //The directory containing a CMake configuration file for OpenCV.
-OpenCV_DIR:PATH=OpenCV_DIR-NOTFOUND
+OpenCV_DIR:PATH=/usr/local/lib/cmake/opencv4
+
+//Value Computed by CMake
+SparseFlowTest_BINARY_DIR:STATIC=/home/tae/optical-flow/cpp/build
+
+//Value Computed by CMake
+SparseFlowTest_IS_TOP_LEVEL:STATIC=ON
+
+//Value Computed by CMake
+SparseFlowTest_SOURCE_DIR:STATIC=/home/tae/optical-flow/cpp
 
 //Path to a library.
 TORCH_LIBRARY:FILEPATH=/home/tae/libs/libtorch/lib/libtorch.so
@@ -787,6 +790,8 @@ CUDA_make2cmake:INTERNAL=/home/tae/libs/libtorch/share/cmake/Caffe2/Modules_CUDA
 CUDA_nppc_LIBRARY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CUDA_nppc_static_LIBRARY
 CUDA_nppc_static_LIBRARY-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: CUDA_nppi_LIBRARY
+CUDA_nppi_LIBRARY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CUDA_nppial_LIBRARY
 CUDA_nppial_LIBRARY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CUDA_nppial_static_LIBRARY
@@ -853,6 +858,8 @@ CUDA_run_nvcc:INTERNAL=/home/tae/libs/libtorch/share/cmake/Caffe2/Modules_CUDA_f
 FIND_PACKAGE_MESSAGE_DETAILS_CUDA:INTERNAL=[/usr/local/cuda-12.8][/usr/local/cuda-12.8/bin/nvcc][/usr/local/cuda-12.8/include][/usr/local/cuda-12.8/lib64/libcudart.so][v12.8()]
 //Details about finding CUDAToolkit
 FIND_PACKAGE_MESSAGE_DETAILS_CUDAToolkit:INTERNAL=[/usr/include][12.0.140][/usr/local/cuda-12.8/lib64/libcudart.so][/usr/bin][v12.0.140()]
+//Details about finding OpenCV
+FIND_PACKAGE_MESSAGE_DETAILS_OpenCV:INTERNAL=[/usr/local][v4.14.0()]
 //Details about finding Python
 FIND_PACKAGE_MESSAGE_DETAILS_Python:INTERNAL=[/home/tae/anaconda3/envs/dl/bin/python3][cfound components: Interpreter ][v3.14.2()]
 //Details about finding Threads

@@ -5,15 +5,7 @@ from PIL import Image
 from time import perf_counter
 from utils import FlowSet
     
-def main():
-
-    args = argparse.ArgumentParser(
-        prog='LK Sparse Optical Flow timer',
-        description='Measure the time for Lucas-Kande sparse optical flow.'
-    )
-    args.add_argument('--plot', action='store_true', help='Whether to plot using OpenCVs plotting functions.')
-    args = args.parse_args()
-    plot = args.plot
+def sparse(plot=False):
 
     # params for Shi-Tomasi corner detection
     feature_params = dict(
@@ -65,8 +57,5 @@ def main():
             break
 
     end = perf_counter()
-    print(f"Total time = {end - start:.4f} | Average = {(end - start) / len(data):.4f}")
-
-
-if __name__ == "__main__":
-    main()
+    #print(f"Total time = {end - start:.4f} | Average = {(end - start) / len(data):.4f}")
+    return end - start
