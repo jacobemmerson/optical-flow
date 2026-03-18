@@ -2,6 +2,8 @@
 
 Tae Emmerson | Jan. 24, 2026
 
+![birds with magenta overlay, 500 features using LK algorithmf](data/birds.webp)
+
 ## Introduction
 
 This project explores the throughput of the classical Lucas-Kanade optical flow algorithm based on its OpenCV (C++/Python) and CUDA implementation from scratch. 
