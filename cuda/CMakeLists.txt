@@ -6,31 +6,88 @@ find_package(CUDAToolkit REQUIRED)           # modern way (works on CUDA 10+)
 enable_language(CUDA)
 
 add_executable(
-    fast_lk
+    lk_gpu
     main.cpp
     utils/utils.cpp
     lucas_kanade.cu
 )
 
-target_include_directories(fast_lk PRIVATE
+target_include_directories(lk_gpu PRIVATE
     ${OpenCV_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
 )
 
-target_link_libraries(fast_lk PRIVATE
+target_link_libraries(lk_gpu PRIVATE
     ${OpenCV_LIBS}
     CUDA::cudart
 )
 
-target_compile_options(fast_lk PRIVATE
+target_compile_options(lk_gpu PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native>
     $<$<COMPILE_LANGUAGE:CUDA>:-O3>
 )
 
-set_target_properties(fast_lk PROPERTIES
+set_target_properties(lk_gpu PROPERTIES
     CUDA_ARCHITECTURES "75"          
     CUDA_SEPARABLE_COMPILATION OFF
 )
+
+
+add_executable(
+    lk_cpu
+    main_cpu.cpp
+    utils/utils.cpp
+    lucas_kanade.cu
+)
+
+target_include_directories(lk_cpu PRIVATE
+    ${OpenCV_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
+)
+
+target_link_libraries(lk_cpu PRIVATE
+    ${OpenCV_LIBS}
+    CUDA::cudart
+)
+
+target_compile_options(lk_cpu PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native>
+    $<$<COMPILE_LANGUAGE:CUDA>:-O3>
+)
+
+set_target_properties(lk_cpu PROPERTIES
+    CUDA_ARCHITECTURES "75"          
+    CUDA_SEPARABLE_COMPILATION OFF
+)
+
+add_executable(
+    bird
+    bird.cpp
+    utils/utils.cpp
+    lucas_kanade.cu
+)
+
+target_include_directories(bird PRIVATE
+    ${OpenCV_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
+)
+
+target_link_libraries(bird PRIVATE
+    ${OpenCV_LIBS}
+    CUDA::cudart
+)
+
+target_compile_options(bird PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-O3 -march=native>
+    $<$<COMPILE_LANGUAGE:CUDA>:-O3>
+)
+
+set_target_properties(bird PROPERTIES
+    CUDA_ARCHITECTURES "75"          
+    CUDA_SEPARABLE_COMPILATION OFF
+)
+
+
 
 # --- Nice build output ---
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")  
