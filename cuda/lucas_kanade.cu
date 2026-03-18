@@ -5,10 +5,6 @@
 #define PATCH_PIXELS (PATCH_SIZE*PATCH_SIZE)
 #define MAX_ITERS 10
 
-// -------------------------------------------
-// Bilinear sampling
-// -------------------------------------------
-
 __device__ inline float bilinear(
     const float* img,
     int w,
@@ -36,10 +32,6 @@ __device__ inline float bilinear(
            dx*dy*I11;
 }
 
-// -------------------------------------------
-// Warp reduction
-// -------------------------------------------
-
 __device__ inline float warpReduce(float val)
 {
     for(int offset=16; offset>0; offset/=2)
@@ -47,10 +39,6 @@ __device__ inline float warpReduce(float val)
 
     return val;
 }
-
-// -------------------------------------------
-// Warp-per-feature LK kernel
-// -------------------------------------------
 
 __global__ void lk_warp_kernel(
     const float* prev,
