@@ -1,12 +1,13 @@
 # Lucas-Kanade Sparse and Dense Optical Flow with Fused Kernels
-
 Tae Emmerson | Jan. 24, 2026
 
-![birds with magenta overlay, 500 features using LK algorithmf](data/birds.webp)
+This project explores the throughput of the classical Lucas-Kanade optical flow algorithm based on its OpenCV (C++/Python) and CUDA implementation from scratch. As Lucas-Kanade is a memory-bound algorithm, particularly on modest GPUs, I explore kernel fusion to reduce the overhead of memory operations on a basic implementation of the algorithm that meets the standards of OpenCV's with no Pyramids.
 
-## Introduction
-
-This project explores the throughput of the classical Lucas-Kanade optical flow algorithm based on its OpenCV (C++/Python) and CUDA implementation from scratch. 
+<div align="center">
+<video src="data/birds.mp4" width="700" loop autoplay muted playsinline>
+  Your browser does not support the video tag.
+</video>
+</div>
 
 ## Results
 
