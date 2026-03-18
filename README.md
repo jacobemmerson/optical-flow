@@ -8,11 +8,14 @@ This project explores the throughput of the classical Lucas-Kanade optical flow 
 
 ## Results
 
-| | Runtime per Frame (ms) | Speedup (relative)|
+*These results were produced using a GTX 1650ti and Intel i7 on the KITTI Optical Flow dataset with a 7x7 window, single-level (no pyramids).*
+
+| Language | Average Time per Frame (ms) | Hardware|
 | --- | --- | --- |
-| Python | - | - |
-| C++ | 1.6099 | - |
-| CUDA | 0.1921 | - |
+| Python | 0.739740 | CPU |
+| C++ | 0.837934 | CPU |
+| C++ | 0.558732 | GPU |
+| CUDA | 0.180362 | GPU |
 
 # Optical Flow
 

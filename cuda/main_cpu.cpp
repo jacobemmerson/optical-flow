@@ -3,8 +3,8 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
-#include <opencv2/cudaoptflow.hpp>
-#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/video/tracking.hpp>
 
 #include <chrono>
 #include <cuda_runtime.h>
@@ -66,7 +66,8 @@ int main(int argc, char** argv)
 
     double cuda_total = 0;
     double opencv_total = 0;
-
+    
+    std::cout << "C++ OpenCV threads: " << cv::getNumThreads() << std::endl;
     for (size_t i = 0; i < dataset.size(); ++i)
     {
         auto sample = dataset.get(i);
@@ -126,10 +127,6 @@ int main(int argc, char** argv)
 
         // ===== CUDA Fused Kernel Implementation =====
 
-        // warmup
-        run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,1,WIDTH,HEIGHT);
-        cudaDeviceSynchronize();
-
         cudaEvent_t start, stop;
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
@@ -162,33 +159,22 @@ int main(int argc, char** argv)
 
         // ===== OpenCV LK Implementation =====
 
-
-        // Upload images to GPU
-        cv::cuda::GpuMat d_img1(img1_gray);
-        cv::cuda::GpuMat d_img2(img2_gray);
-
-        // Upload feature points
-        cv::cuda::GpuMat d_pts1(pts1);
-
-        cv::cuda::GpuMat d_pts2;
-        cv::cuda::GpuMat d_status;
-        cv::cuda::GpuMat d_err;
-
-        cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_lk = cv::cuda::SparsePyrLKOpticalFlow::create(
-            cv::Size(7,7), // winsize
-            0, // max level = 0, single level no pyramid
-            10 // max iters to match my kernel
-        );
-
+        std::vector<cv::Point2f> pts2;
+        std::vector<uchar> status;
+        std::vector<float> err;
+        cv::TermCriteria criteria = cv::TermCriteria((cv::TermCriteria::COUNT) + (cv::TermCriteria::EPS), 10, 0.03);
         auto t1 = std::chrono::high_resolution_clock::now();
 
-        d_lk->calc(
-            d_img1,
-            d_img2,
-            d_pts1,
-            d_pts2,
-            d_status,
-            d_err
+        cv::calcOpticalFlowPyrLK(
+            img1_gray,
+            img2_gray,
+            pts1,
+            pts2,
+            status,
+            err,
+            cv::Size(7,7),
+            0,
+            criteria
         );
 
         auto t2 = std::chrono::high_resolution_clock::now();
@@ -203,8 +189,7 @@ int main(int argc, char** argv)
         if (plot)
         {
             cv::Mat display = sample.img2.clone();
-            cv::Mat pts2(d_pts2);
-            cv::Mat status(d_status);
+
             drawSparseFlow(pts1, pts2, status, display);
 
             cv::imshow("OpenCV Sparse LK", display);

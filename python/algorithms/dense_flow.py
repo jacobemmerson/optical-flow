@@ -2,7 +2,7 @@ import numpy as np
 import cv2 as cv
 import argparse
 from PIL import Image
-from time import perf_counter
+from time import perf_counter_ns
 from algorithms.utils import FlowSet
     
 def dense(plot=False, return_average=False):
@@ -19,15 +19,18 @@ def dense(plot=False, return_average=False):
     )
 
     data = FlowSet('../data', occ=True)
-
-    start = perf_counter()
+    time = 0
+    frames = 0
     for idx, (img1, img2, flow) in enumerate(data):
         img1_gray = cv.cvtColor(img1, cv.COLOR_BGR2GRAY)
         img2_gray = cv.cvtColor(img2, cv.COLOR_BGR2GRAY)
 
         # calculate optical flow
+        start = perf_counter_ns()
         predicted_flow = cv.calcOpticalFlowFarneback(img1_gray, img2_gray, None, **farneback_params)
-            
+        end = perf_counter_ns()
+        time += end - start
+        frames += 1
         if plot:
             cv.imshow('frame', img2)
             cv.imshow('flow', flow)
@@ -35,8 +38,4 @@ def dense(plot=False, return_average=False):
             if k == 27:
                 return
             
-    end = perf_counter()
-    time = end - start
-    if return_average:
-        return time / len(data)
-    return time
+    return (time / frames) * 1e-6

@@ -2,14 +2,15 @@ import numpy as np
 import cv2 as cv
 import argparse
 from PIL import Image
-from time import perf_counter
+from time import perf_counter_ns
 from algorithms.utils import FlowSet
     
-def sparse(plot=False, return_average=False):
-
+def sparse(plot=False):
+    
+    print("Python OpenCV threads:", cv.getNumThreads())
     # params for Shi-Tomasi corner detection
     feature_params = dict(
-        maxCorners = 100,
+        maxCorners = 2000,
         qualityLevel = 0.3,
         minDistance = 7,
         blockSize = 7 
@@ -17,25 +18,29 @@ def sparse(plot=False, return_average=False):
 
     # params for lucas kanade optical flow
     lk_params = dict(
-        winSize  = (15, 15),
-        maxLevel = 2,
+        winSize  = (7, 7),
+        maxLevel = 0,
         criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.03)
     )
 
     color = np.random.randint(0, 255, (100, 3))
     data = FlowSet('../data', occ=True)
 
-    start = perf_counter()
+    time = 0
+    frames = 0
     for idx, (img1, img2, _) in enumerate(data):
         img1_gray = cv.cvtColor(img1, cv.COLOR_BGR2GRAY)
         img2_gray = cv.cvtColor(img2, cv.COLOR_BGR2GRAY)
-
+    
         # corners/features to track flow using ST method
         f0 = cv.goodFeaturesToTrack(img1_gray, mask = None, **feature_params)
 
+        start = perf_counter_ns()
         # calculate optical flow
         f1, st, err = cv.calcOpticalFlowPyrLK(img1_gray, img2_gray, f0, None, **lk_params)
-
+        end = perf_counter_ns()
+        time += end - start
+        frames += 1
         if plot:
             mask = np.zeros_like(img1)
             if f1 is not None:
@@ -56,9 +61,5 @@ def sparse(plot=False, return_average=False):
         if k == 27: # Break if ESC is pressed while plotting
             break
 
-    end = perf_counter()
     #print(f"Total time = {end - start:.4f} | Average = {(end - start) / len(data):.4f}")
-    time = end - start
-    if return_average:
-        return time / len(data)
-    return time
+    return (time / frames) * 1e-6
