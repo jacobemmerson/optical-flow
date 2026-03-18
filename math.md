@@ -93,14 +93,6 @@ $$
 \end{bmatrix}
 $$
 
-## Results
-
-| | Runtime per Frame (ms) | Speedup (relative)|
-| --- | --- | --- |
-| Python | - | - |
-| C++ | 1.6099 | - |
-| CUDA | 0.1921 | - |
-
 ## Citations
 
 - https://www.cs.cmu.edu/~16385/s15/lectures/Lecture21.pdf
