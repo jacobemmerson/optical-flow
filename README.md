@@ -3,15 +3,7 @@ Tae Emmerson | Jan. 24, 2026
 
 This project explores the throughput of the classical Lucas-Kanade optical flow algorithm based on its OpenCV (C++/Python) and CUDA implementation from scratch. As Lucas-Kanade is a memory-bound algorithm, particularly on modest GPUs, I explore kernel fusion to reduce the overhead of memory operations on a basic implementation of the algorithm that meets the standards of OpenCV's with no Pyramids.
 
-<div align="center">
-<video src="data/birds.mp4" width="700" loop autoplay muted playsinline>
-  Your browser does not support the video tag.
-</video>
-</div>
-
 https://github.com/user-attachments/assets/a146e0d6-aaae-44ab-bbaf-8f32d3134031
-
-
 
 ## Results
 
