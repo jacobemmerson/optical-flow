@@ -45,6 +45,12 @@ Nsight Compute counters (clocks locked for comparability):
 
 The workload is not memory-bound: DRAM stays far below peak and both kernels are cache-resident. The speedup comes from thread-to-work mapping. The fused kernel assigns one warp per point; OpenCV assigns a 256-thread block per point plus a separate helper kernel, so it executes about 3.7x more instructions for the same result. Same bytes, same accuracy, far less work.
 
+## Build
+
+Building requires CUDA 13 and an OpenCV built with CUDA support, plus a small
+patch to a CUDA system header on recent glibc. See [SETUP.md](SETUP.md) for the
+full reproducible steps.
+
 # Optical Flow
 
 *Note: The work below was transcribed by ChatGPT into code blocks since GitHub doesn't render multi-line math equations. My original work can be found in `math.md`*
