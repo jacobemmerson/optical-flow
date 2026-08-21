@@ -15,6 +15,7 @@ void run_lucas_kanade_cuda(
     const float* d_curr,
     const float2* d_points,
     float2* d_flow,
+    unsigned char* d_status,
     int n_points,
     int width,
     int height);
@@ -30,6 +31,7 @@ int main()
     int WIDTH = 0, HEIGHT = 0;
     float *d_prev = nullptr, *d_curr = nullptr;
     float2 *d_points = nullptr, *d_flow = nullptr;
+    unsigned char *d_status = nullptr;
 
     float2 h_points[MAX_FEATURES];
     float2 h_flow[MAX_FEATURES];
@@ -49,6 +51,7 @@ int main()
     cudaMalloc(&d_curr, WIDTH * HEIGHT * sizeof(float));
     cudaMalloc(&d_points, MAX_FEATURES * sizeof(float2));
     cudaMalloc(&d_flow, MAX_FEATURES * sizeof(float2));
+    cudaMalloc(&d_status, MAX_FEATURES * sizeof(unsigned char));
 
     cv::VideoWriter video("../../birds.avi",cv::VideoWriter::fourcc('M','J','P','G'), 30, cv::Size(WIDTH, HEIGHT),true);
 
@@ -95,11 +98,11 @@ int main()
         cudaMemcpy(d_points, h_points, n_points * sizeof(float2), cudaMemcpyHostToDevice);
 
         // Warmup kernel
-        run_lucas_kanade_cuda(d_prev, d_curr, d_points, d_flow, 1, WIDTH, HEIGHT);
+        run_lucas_kanade_cuda(d_prev, d_curr, d_points, d_flow, d_status, 1, WIDTH, HEIGHT);
         cudaDeviceSynchronize();
 
         // Run fused kernel
-        run_lucas_kanade_cuda(d_prev, d_curr, d_points, d_flow, n_points, WIDTH, HEIGHT);
+        run_lucas_kanade_cuda(d_prev, d_curr, d_points, d_flow, d_status, n_points, WIDTH, HEIGHT);
         cudaDeviceSynchronize();
 
         // Download flow
@@ -135,6 +138,7 @@ int main()
     cudaFree(d_curr);
     cudaFree(d_points);
     cudaFree(d_flow);
+    cudaFree(d_status);
 
     return 0;
 }

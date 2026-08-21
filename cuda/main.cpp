@@ -1,4 +1,7 @@
 #include <iostream>
+#include <cmath>
+#include <algorithm>
+#include <vector>
 #include "utils/utils.h"
 
 #include <opencv2/core.hpp>
@@ -17,9 +20,49 @@ void run_lucas_kanade_cuda(
     const float* d_curr,
     const float2* d_points,
     float2* d_flow,
+    unsigned char* d_status,
     int n_points,
     int width,
     int height);
+
+// KITTI-style sparse accuracy for one arm. Each arm is scored only where it
+// keeps a point (status == 1) and ground truth is valid, so mean EPE compares
+// like flow against like; density is the share of valid-GT points it kept.
+struct AccuracyStats {
+    std::vector<float> epes; // per-point EPE for scored points, for the median
+    double epe_sum = 0;
+    long outliers = 0;  // KITTI Fl: EPE > 3px and EPE > 5% of |GT|
+    long gt_valid = 0;  // GT valid, kept or not -> density denominator
+};
+
+void scorePoint(
+    AccuracyStats& acc,
+    const cv::Mat& groundTruth,
+    const cv::Point2f& point,
+    float du,
+    float dv,
+    bool kept)
+{
+    int x = std::lround(point.x);
+    int y = std::lround(point.y);
+    if (x < 0 || y < 0 || x >= groundTruth.cols || y >= groundTruth.rows) return;
+
+    cv::Vec3f gt = groundTruth.at<cv::Vec3f>(y, x);
+    if (gt[2] == 0.f) return; // no ground-truth flow at this pixel
+
+    acc.gt_valid++;
+    if (!kept) return;
+
+    float ex = du - gt[0];
+    float ey = dv - gt[1];
+    float epe = std::sqrt(ex*ex + ey*ey);
+
+    acc.epe_sum += epe;
+    acc.epes.push_back(epe);
+
+    float magnitude = std::sqrt(gt[0]*gt[0] + gt[1]*gt[1]);
+    if (epe > 3.f && epe > 0.05f * magnitude) acc.outliers++;
+}
 
 // Draw sparse flow
 void drawSparseFlow(
@@ -64,11 +107,19 @@ int main(int argc, char** argv)
 
     float2 h_points[MAX_FEATURES];
     float2 h_flow[MAX_FEATURES];
+    unsigned char h_status[MAX_FEATURES];
+
+    unsigned char *d_status = nullptr;
 
     bool first_frame = true;
 
     double cuda_total = 0;
     double opencv_total = 0;
+
+    // KITTI accuracy accumulators. Each arm is scored only on points it keeps
+    // (status == 1) that also have valid ground truth, so mean EPE is
+    // like-for-like; density reveals how aggressively each arm rejects.
+    AccuracyStats cuda_acc, opencv_acc;
 
     for (size_t i = 0; i < dataset.size(); ++i)
     {
@@ -84,6 +135,7 @@ int main(int argc, char** argv)
 
             cudaMalloc(&d_points, MAX_FEATURES * sizeof(float2));
             cudaMalloc(&d_flow,   MAX_FEATURES * sizeof(float2));
+            cudaMalloc(&d_status, MAX_FEATURES * sizeof(unsigned char));
 
             first_frame = false;
         }
@@ -134,7 +186,7 @@ int main(int argc, char** argv)
         cv::cuda::GpuMat d_img2(img2_gray);
         cv::cuda::GpuMat d_pts1(pts1);
         cv::cuda::GpuMat d_pts2;
-        cv::cuda::GpuMat d_status;
+        cv::cuda::GpuMat d_cv_status;
         cv::cuda::GpuMat d_err;
 
         cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_lk = cv::cuda::SparsePyrLKOpticalFlow::create(
@@ -148,8 +200,8 @@ int main(int argc, char** argv)
         int warmup_iters = profile ? 10 : 1;
         for (int w = 0; w < warmup_iters; ++w)
         {
-            run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,n_points,WIDTH,HEIGHT);
-            d_lk->calc(d_img1,d_img2,d_pts1,d_pts2,d_status,d_err);
+            run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,d_status,n_points,WIDTH,HEIGHT);
+            d_lk->calc(d_img1,d_img2,d_pts1,d_pts2,d_cv_status,d_err);
         }
         cudaDeviceSynchronize();
 
@@ -167,7 +219,7 @@ int main(int argc, char** argv)
 
         // Custom fused kernel
         cudaEventRecord(start);
-        run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,n_points,WIDTH,HEIGHT);
+        run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,d_status,n_points,WIDTH,HEIGHT);
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
 
@@ -179,9 +231,13 @@ int main(int argc, char** argv)
             n_points * sizeof(float2),
             cudaMemcpyDeviceToHost);
 
+        cudaMemcpy(h_status, d_status,
+            n_points * sizeof(unsigned char),
+            cudaMemcpyDeviceToHost);
+
         // OpenCV GPU LK
         cudaEventRecord(start);
-        d_lk->calc(d_img1,d_img2,d_pts1,d_pts2,d_status,d_err);
+        d_lk->calc(d_img1,d_img2,d_pts1,d_pts2,d_cv_status,d_err);
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
 
@@ -194,13 +250,33 @@ int main(int argc, char** argv)
         cudaEventDestroy(start);
         cudaEventDestroy(stop);
 
+        // ===== Accuracy vs KITTI ground truth =====
+        if (!profile)
+        {
+            cv::Mat groundTruth = dataset.groundTruthFlow(i);
+
+            cv::Mat pts2(d_pts2);
+            cv::Mat cv_status(d_cv_status);
+
+            for (int k = 0; k < n_points; ++k)
+            {
+                scorePoint(cuda_acc, groundTruth, pts1[k],
+                           h_flow[k].x, h_flow[k].y, h_status[k] != 0);
+
+                cv::Point2f moved = pts2.at<cv::Point2f>(k);
+                scorePoint(opencv_acc, groundTruth, pts1[k],
+                           moved.x - pts1[k].x, moved.y - pts1[k].y,
+                           cv_status.at<uchar>(k) != 0);
+            }
+        }
+
         // ===== VISUALIZATION ===== (debugging)
 
         if (plot)
         {
             cv::Mat display = sample.img2.clone();
             cv::Mat pts2(d_pts2);
-            cv::Mat status(d_status);
+            cv::Mat status(d_cv_status);
             drawSparseFlow(pts1, pts2, status, display);
 
             cv::imshow("OpenCV Sparse LK", display);
@@ -227,10 +303,37 @@ int main(int argc, char** argv)
               << (opencv_total / cuda_total)
               << "x\n";
 
+    if (!profile)
+    {
+        auto report = [](const char* name, AccuracyStats& acc) {
+            long scored = static_cast<long>(acc.epes.size());
+            double mean = scored ? acc.epe_sum / scored : 0.0;
+            double median = 0.0;
+            if (scored) {
+                auto mid = acc.epes.begin() + scored / 2;
+                std::nth_element(acc.epes.begin(), mid, acc.epes.end());
+                median = *mid;
+            }
+            double outlier_pct = scored ? 100.0 * acc.outliers / scored : 0.0;
+            double density = acc.gt_valid ? 100.0 * scored / acc.gt_valid : 0.0;
+            std::cout << name
+                      << "  mean EPE: " << mean << " px"
+                      << " | median EPE: " << median << " px"
+                      << " | Fl-outliers: " << outlier_pct << "%"
+                      << " | density: " << density << "%"
+                      << " (" << scored << "/" << acc.gt_valid << ")\n";
+        };
+
+        std::cout << "\nAccuracy vs KITTI ground truth:\n";
+        report("CUDA  ", cuda_acc);
+        report("OpenCV", opencv_acc);
+    }
+
     cudaFree(d_prev);
     cudaFree(d_curr);
     cudaFree(d_points);
     cudaFree(d_flow);
+    cudaFree(d_status);
 
     return 0;
 }

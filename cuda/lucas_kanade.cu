@@ -5,6 +5,11 @@
 #define PATCH_PIXELS (PATCH_SIZE*PATCH_SIZE)
 #define MAX_ITERS 10
 
+// Matches OpenCV SparsePyrLKOpticalFlow's default minEigThreshold: a point is
+// rejected when the structure tensor's smallest eigenvalue (per window pixel)
+// falls below this, i.e. the patch lacks the texture to solve for flow.
+#define MIN_EIG_THRESHOLD 1e-4f
+
 // ===== Bilinear Interpolation =====
 // allows for sampling subpixel locations by 
 // interpolating the intensity of a pixel at (x,y)
@@ -64,6 +69,7 @@ __global__ void lk_warp_kernel(
     const float* curr,
     const float2* pts,
     float2* flow,
+    unsigned char* status,
     int n,
     int w,
     int h)
@@ -78,6 +84,9 @@ __global__ void lk_warp_kernel(
     float u = 0.f;
     float v = 0.f;
 
+    // Smallest eigenvalue of the (iteration-invariant) structure tensor, used
+    // to reject textureless patches. Only lane 0 computes and keeps it.
+    float lambda_min = 0.f;
 
     // Iteratively refine the flow using Newton-Raphson update
     for(int iter=0; iter<MAX_ITERS; iter++)
@@ -130,6 +139,9 @@ __global__ void lk_warp_kernel(
         {
             float det = Gxx*Gyy - Gxy*Gxy;
 
+            float trace = Gxx + Gyy;
+            lambda_min = 0.5f * (trace - sqrtf(fmaxf(0.f, trace*trace - 4.f*det)));
+
             if (fabs(det) > 1e-6f)
             {
                 float inv = 1.f/det;
@@ -151,7 +163,10 @@ __global__ void lk_warp_kernel(
     }
 
     if (lane == 0)
+    {
         flow[warp_id] = make_float2(u,v);
+        status[warp_id] = (lambda_min / PATCH_PIXELS) >= MIN_EIG_THRESHOLD;
+    }
 }
 
 // Kernel Launcher
@@ -161,6 +176,7 @@ void run_lucas_kanade_cuda(
     const float* d_curr,
     const float2* d_points,
     float2* d_flow,
+    unsigned char* d_status,
     int n_points,
     int width,
     int height)
@@ -175,6 +191,7 @@ void run_lucas_kanade_cuda(
         d_curr,
         d_points,
         d_flow,
+        d_status,
         n_points,
         width,
         height);

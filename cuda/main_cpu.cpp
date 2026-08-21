@@ -17,6 +17,7 @@ void run_lucas_kanade_cuda(
     const float* d_curr,
     const float2* d_points,
     float2* d_flow,
+    unsigned char* d_status,
     int n_points,
     int width,
     int height);
@@ -58,6 +59,7 @@ int main(int argc, char** argv)
 
     float2 *d_points = nullptr;
     float2 *d_flow = nullptr;
+    unsigned char *d_status = nullptr;
 
     float2 h_points[MAX_FEATURES];
     float2 h_flow[MAX_FEATURES];
@@ -82,6 +84,7 @@ int main(int argc, char** argv)
 
             cudaMalloc(&d_points, MAX_FEATURES * sizeof(float2));
             cudaMalloc(&d_flow,   MAX_FEATURES * sizeof(float2));
+            cudaMalloc(&d_status, MAX_FEATURES * sizeof(unsigned char));
 
             first_frame = false;
         }
@@ -138,6 +141,7 @@ int main(int argc, char** argv)
             d_curr,
             d_points,
             d_flow,
+            d_status,
             n_points,
             WIDTH,
             HEIGHT);
@@ -218,6 +222,7 @@ int main(int argc, char** argv)
     cudaFree(d_curr);
     cudaFree(d_points);
     cudaFree(d_flow);
+    cudaFree(d_status);
 
     return 0;
 }
