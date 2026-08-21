@@ -1,0 +1,5 @@
+/home/taesur/projects/optical-flow/cuda/build/CMakeFiles/lk_gpu.dir
+/home/taesur/projects/optical-flow/cuda/build/CMakeFiles/lk_cpu.dir
+/home/taesur/projects/optical-flow/cuda/build/CMakeFiles/bird.dir
+/home/taesur/projects/optical-flow/cuda/build/CMakeFiles/edit_cache.dir
+/home/taesur/projects/optical-flow/cuda/build/CMakeFiles/rebuild_cache.dir
