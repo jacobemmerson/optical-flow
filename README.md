@@ -3,7 +3,7 @@ Tae Emmerson | Jan. 24, 2026
 
 This project implements the classical Lucas-Kanade optical flow algorithm as a single fused CUDA kernel and benchmarks it against OpenCV's GPU sparse implementation. Both run single-level with a 7x7 window and no pyramids.
 
-I started from the common assumption that Lucas-Kanade is memory-bound, but Nsight Compute told a different story. On this workload DRAM sits near 6 percent of peak and both kernels are cache-resident, so bytes moved is not the bottleneck. The custom kernel is faster because it does less work: it maps one warp (32 threads) to each tracked point and reduces the structure tensor with warp shuffles, while OpenCV assigns a full 256-thread block per point. OpenCV executes roughly 3.7x more instructions to compute the same flow, and the custom kernel matches its accuracy to within 0.2 px.
+(Update: 08/21/2026) I started from the common assumption that Lucas-Kanade is memory-bound but found that this assumption was violated when profiling with Nsight Compute. Workload DRAM sits near 6 percent of peak and both kernels are cache-resident, so bytes moved is not the bottleneck. The custom kernel is faster because it does less work: it maps one warp (32 threads) to each tracked point and reduces the structure tensor with warp shuffles, while OpenCV assigns a full 256-thread block per point. OpenCV executes roughly 3.7x more instructions to compute the same flow, and the custom kernel matches its accuracy to within 0.2 px.
 
 https://github.com/user-attachments/assets/a146e0d6-aaae-44ab-bbaf-8f32d3134031
 
