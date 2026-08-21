@@ -37,14 +37,16 @@ REPORT="$OUTDIR/lk_profile"
 CSV="$OUTDIR/lk_counters.csv"
 TABLE="$OUTDIR/lk_counters.md"
 
-# Memory-bound counter set for sm_75. Byte sums show the traffic fusion cuts;
-# the two throughput percents are the speed-of-light read (memory-bound if DRAM
-# is high while SM is low); hit rates show cache reuse; occupancy + registers
-# explain how much of the machine each kernel keeps busy.
+# Counter set for sm_75. Byte sums are DRAM traffic; the two throughput percents
+# are the speed-of-light read (memory-bound if DRAM is high while SM is low, and
+# latency-bound if both are low); instructions executed is the work-efficiency
+# measure (fewer instructions for the same result); hit rates show cache reuse;
+# occupancy + registers explain how much of the machine each kernel keeps busy.
 METRICS="dram__bytes_read.sum,\
 dram__bytes_write.sum,\
 dram__throughput.avg.pct_of_peak_sustained_elapsed,\
 sm__throughput.avg.pct_of_peak_sustained_elapsed,\
+sm__inst_executed.sum,\
 l1tex__t_sector_hit_rate.pct,\
 lts__t_sector_hit_rate.pct,\
 sm__warps_active.avg.pct_of_peak_sustained_active,\

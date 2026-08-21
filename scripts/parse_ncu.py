@@ -19,6 +19,7 @@ METRIC_LABELS = {
     "dram__bytes_write.sum": "DRAM write",
     "dram__throughput.avg.pct_of_peak_sustained_elapsed": "DRAM %peak",
     "sm__throughput.avg.pct_of_peak_sustained_elapsed": "SM %peak",
+    "sm__inst_executed.sum": "Instructions",
     "l1tex__t_sector_hit_rate.pct": "L1 hit%",
     "lts__t_sector_hit_rate.pct": "L2 hit%",
     "sm__warps_active.avg.pct_of_peak_sustained_active": "Occupancy%",
