@@ -6,8 +6,8 @@
 #include <opencv2/cudaoptflow.hpp>
 #include <opencv2/cudaimgproc.hpp>
 
-#include <chrono>
 #include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
 
 #define MAX_FEATURES 2000
 
@@ -44,9 +44,12 @@ int main(int argc, char** argv)
 {
     cv::CommandLineParser parser(argc, argv,
         "{ h help | | help }"
-        "{ plot | | visualize flow }");
+        "{ plot | | visualize flow }"
+        "{ profile | | capture one warm frame between cudaProfiler"
+        " start/stop for Nsight Compute, then exit }");
 
     bool plot = parser.has("plot");
+    bool profile = parser.has("profile");
 
     FlowSet dataset("../../data", true);
 
@@ -124,52 +127,12 @@ int main(int argc, char** argv)
             n_points * sizeof(float2),
             cudaMemcpyHostToDevice);
 
-        // ===== CUDA Fused Kernel Implementation =====
+        // ===== Prepare both implementations =====
 
-        // warmup
-        run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,1,WIDTH,HEIGHT);
-        cudaDeviceSynchronize();
-
-        cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-
-        cudaEventRecord(start);
-
-        run_lucas_kanade_cuda(
-            d_prev,
-            d_curr,
-            d_points,
-            d_flow,
-            n_points,
-            WIDTH,
-            HEIGHT);
-
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-
-        float cuda_ms;
-        cudaEventElapsedTime(&cuda_ms, start, stop);
-
-        cuda_total += cuda_ms;
-
-        cudaMemcpy(h_flow, d_flow,
-            n_points * sizeof(float2),
-            cudaMemcpyDeviceToHost);
-
-        cudaEventDestroy(start);
-        cudaEventDestroy(stop);
-
-        // ===== OpenCV LK Implementation =====
-
-
-        // Upload images to GPU
+        // OpenCV GPU inputs
         cv::cuda::GpuMat d_img1(img1_gray);
         cv::cuda::GpuMat d_img2(img2_gray);
-
-        // Upload feature points
         cv::cuda::GpuMat d_pts1(pts1);
-
         cv::cuda::GpuMat d_pts2;
         cv::cuda::GpuMat d_status;
         cv::cuda::GpuMat d_err;
@@ -180,23 +143,56 @@ int main(int argc, char** argv)
             10 // max iters to match my kernel
         );
 
-        auto t1 = std::chrono::high_resolution_clock::now();
+        // Both arms are warmed before timing. In profile mode extra warmups
+        // ensure the captured launch is steady-state (caches/autotune settled).
+        int warmup_iters = profile ? 10 : 1;
+        for (int w = 0; w < warmup_iters; ++w)
+        {
+            run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,n_points,WIDTH,HEIGHT);
+            d_lk->calc(d_img1,d_img2,d_pts1,d_pts2,d_status,d_err);
+        }
+        cudaDeviceSynchronize();
 
-        d_lk->calc(
-            d_img1,
-            d_img2,
-            d_pts1,
-            d_pts2,
-            d_status,
-            d_err
-        );
+        // ===== Timed region =====
+        // Both arms are device-timed with cudaEvents so the comparison is
+        // like-for-like. Under Nsight Compute (`--profile`) these event times
+        // are meaningless -- ncu replays kernels -- so this stdout timing is
+        // only valid on a normal run; the ncu run is for counters alone.
 
-        auto t2 = std::chrono::high_resolution_clock::now();
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
 
-        double opencv_ms =
-            std::chrono::duration<double,std::milli>(t2 - t1).count();
+        if (profile) cudaProfilerStart();
 
+        // Custom fused kernel
+        cudaEventRecord(start);
+        run_lucas_kanade_cuda(d_prev,d_curr,d_points,d_flow,n_points,WIDTH,HEIGHT);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        float cuda_ms;
+        cudaEventElapsedTime(&cuda_ms, start, stop);
+        cuda_total += cuda_ms;
+
+        cudaMemcpy(h_flow, d_flow,
+            n_points * sizeof(float2),
+            cudaMemcpyDeviceToHost);
+
+        // OpenCV GPU LK
+        cudaEventRecord(start);
+        d_lk->calc(d_img1,d_img2,d_pts1,d_pts2,d_status,d_err);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        float opencv_ms;
+        cudaEventElapsedTime(&opencv_ms, start, stop);
         opencv_total += opencv_ms;
+
+        if (profile) cudaProfilerStop();
+
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
 
         // ===== VISUALIZATION ===== (debugging)
 
@@ -212,9 +208,11 @@ int main(int argc, char** argv)
             if (cv::waitKey(1) == 27)
                 break;
         }
+
+        if (profile) break;
     }
 
-    auto frame_count = dataset.size();
+    size_t frame_count = profile ? 1 : dataset.size();
     std::cout << "\nFrames processed: " << frame_count << "\n";
 
     std::cout << "\nCUDA LK avg time: "
